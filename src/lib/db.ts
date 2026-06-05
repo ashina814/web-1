@@ -107,11 +107,10 @@ function createJsonDb(): Db {
 function createPostgresDb(): Db {
   const { createPool } = require('@vercel/postgres');
   const pool = createPool({ connectionString: getPostgresUrl() });
-  const sql = pool.sql.bind(pool);
   let initialized = false;
   async function init() {
     if (initialized) return;
-    await sql`
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS votes (
         id SERIAL PRIMARY KEY,
         candidate_id TEXT NOT NULL,
@@ -122,27 +121,33 @@ function createPostgresDb(): Db {
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
-    `;
+    `);
     initialized = true;
   }
   return {
     async upsertVote(v) {
       await init();
-      await sql`
-        INSERT INTO votes (candidate_id, category, reason, voter_hash, cookie_id)
-        VALUES (${v.candidateId}, ${v.category}, ${v.reason}, ${v.voterHash}, ${v.cookieId})
-        ON CONFLICT (voter_hash) DO UPDATE SET
-          candidate_id = EXCLUDED.candidate_id,
-          category = EXCLUDED.category,
-          reason = EXCLUDED.reason,
-          cookie_id = EXCLUDED.cookie_id,
-          updated_at = NOW();
-      `;
+      await pool.query(
+        `INSERT INTO votes (candidate_id, category, reason, voter_hash, cookie_id)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (voter_hash) DO UPDATE SET
+           candidate_id = EXCLUDED.candidate_id,
+           category = EXCLUDED.category,
+           reason = EXCLUDED.reason,
+           cookie_id = EXCLUDED.cookie_id,
+           updated_at = NOW();`,
+        [v.candidateId, v.category, v.reason, v.voterHash, v.cookieId],
+      );
     },
     async listVotes() {
       await init();
-      const { rows } = await sql<VoteRow>`SELECT * FROM votes ORDER BY created_at DESC`;
-      return rows;
+      const { rows } = await pool.query(
+        `SELECT id, candidate_id, category, reason, voter_hash, cookie_id,
+                created_at, updated_at
+         FROM votes
+         ORDER BY created_at DESC`,
+      );
+      return rows as VoteRow[];
     },
   };
 }
