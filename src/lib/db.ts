@@ -27,9 +27,19 @@ type Db = {
 
 let cached: Db | null = null;
 
+function getPostgresUrl(): string | undefined {
+  return (
+    process.env.POSTGRES_URL ||
+    process.env.DATABASE_URL ||
+    process.env.POSTGRES_PRISMA_URL ||
+    process.env.POSTGRES_URL_NON_POOLING ||
+    process.env.DATABASE_URL_UNPOOLED
+  );
+}
+
 export function getDb(): Db {
   if (cached) return cached;
-  cached = process.env.POSTGRES_URL ? createPostgresDb() : createJsonDb();
+  cached = getPostgresUrl() ? createPostgresDb() : createJsonDb();
   return cached;
 }
 
@@ -95,7 +105,9 @@ function createJsonDb(): Db {
 }
 
 function createPostgresDb(): Db {
-  const { sql } = require('@vercel/postgres');
+  const { createPool } = require('@vercel/postgres');
+  const pool = createPool({ connectionString: getPostgresUrl() });
+  const sql = pool.sql.bind(pool);
   let initialized = false;
   async function init() {
     if (initialized) return;
