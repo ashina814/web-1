@@ -27,6 +27,12 @@ type Db = {
 
 let cached: Db | null = null;
 
+function toIso(v: unknown): string {
+  if (v instanceof Date) return v.toISOString();
+  if (typeof v === 'string') return v;
+  return String(v);
+}
+
 function getPostgresUrl(): string | undefined {
   return (
     process.env.POSTGRES_URL ||
@@ -147,7 +153,11 @@ function createPostgresDb(): Db {
          FROM votes
          ORDER BY created_at DESC`,
       );
-      return rows as VoteRow[];
+      return rows.map((r: Record<string, unknown>) => ({
+        ...r,
+        created_at: toIso(r.created_at),
+        updated_at: toIso(r.updated_at),
+      })) as VoteRow[];
     },
   };
 }

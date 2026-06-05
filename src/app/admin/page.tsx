@@ -5,7 +5,9 @@ import { CATEGORIES, getCategoryLabel } from '@/lib/categories';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-function fmtDate(s: string): string {
+function fmtDate(s: string | Date): string {
+  if (s instanceof Date) return s.toLocaleString('ja-JP');
+  if (typeof s !== 'string') return String(s);
   const d = new Date(s.includes('T') ? s : s.replace(' ', 'T') + 'Z');
   return isNaN(d.getTime()) ? s : d.toLocaleString('ja-JP');
 }
