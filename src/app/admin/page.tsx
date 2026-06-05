@@ -1,6 +1,5 @@
 import { getDb, type VoteRow } from '@/lib/db';
 import { ALL_CANDIDATES, getCandidate } from '@/lib/candidates';
-import { CATEGORIES, getCategoryLabel } from '@/lib/categories';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -20,20 +19,9 @@ function buildRanking(votes: VoteRow[]) {
     .sort((a, b) => b.count - a.count);
 }
 
-function buildCategoryMatrix(votes: VoteRow[]) {
-  const matrix = new Map<string, Map<string, number>>();
-  for (const v of votes) {
-    if (!matrix.has(v.candidate_id)) matrix.set(v.candidate_id, new Map());
-    const row = matrix.get(v.candidate_id)!;
-    row.set(v.category, (row.get(v.category) ?? 0) + 1);
-  }
-  return matrix;
-}
-
 export default async function AdminPage() {
   const votes = await getDb().listVotes();
   const ranking = buildRanking(votes);
-  const matrix = buildCategoryMatrix(votes);
   const uniqueVoters = new Set(votes.map((v) => v.voter_hash)).size;
 
   return (
@@ -50,11 +38,10 @@ export default async function AdminPage() {
         </a>
       </header>
 
-      <section className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10">
+      <section className="grid grid-cols-3 gap-4 mb-10">
         <Stat label="総投票数" value={votes.length} />
         <Stat label="ユニーク投票者" value={uniqueVoters} />
         <Stat label="候補者数" value={ALL_CANDIDATES.length} />
-        <Stat label="部門数" value={CATEGORIES.length} />
       </section>
 
       <section className="mb-10">
@@ -81,42 +68,6 @@ export default async function AdminPage() {
         </table>
       </section>
 
-      <section className="mb-10 overflow-x-auto">
-        <h2 className="text-xl text-meigoku-gold mb-3 border-b border-meigoku-border pb-2">
-          🏷️ 部門別集計
-        </h2>
-        <table className="text-sm min-w-full">
-          <thead className="text-meigoku-accent">
-            <tr>
-              <th className="text-left py-2 px-2">魔剣士</th>
-              {CATEGORIES.map((c) => (
-                <th key={c.id} className="text-right py-2 px-2">
-                  {c.label}
-                </th>
-              ))}
-              <th className="text-right py-2 px-2">計</th>
-            </tr>
-          </thead>
-          <tbody>
-            {ALL_CANDIDATES.map((c) => {
-              const row = matrix.get(c.id);
-              const total = row ? [...row.values()].reduce((a, b) => a + b, 0) : 0;
-              return (
-                <tr key={c.id} className="border-t border-meigoku-border">
-                  <td className="py-2 px-2">{c.name}</td>
-                  {CATEGORIES.map((cat) => (
-                    <td key={cat.id} className="text-right py-2 px-2">
-                      {row?.get(cat.id) ?? 0}
-                    </td>
-                  ))}
-                  <td className="text-right py-2 px-2 font-bold">{total}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </section>
-
       <section>
         <h2 className="text-xl text-meigoku-gold mb-3 border-b border-meigoku-border pb-2">
           🗒️ 投票一覧 ({votes.length})
@@ -128,11 +79,8 @@ export default async function AdminPage() {
               className="bg-meigoku-panel/70 border border-meigoku-border rounded p-3"
             >
               <div className="flex justify-between text-xs text-meigoku-accent mb-1 flex-wrap gap-2">
-                <span>
-                  <span className="text-meigoku-gold font-bold">
-                    {getCandidate(v.candidate_id)?.name ?? v.candidate_id}
-                  </span>{' '}
-                  / {getCategoryLabel(v.category)}
+                <span className="text-meigoku-gold font-bold">
+                  {getCandidate(v.candidate_id)?.name ?? v.candidate_id}
                 </span>
                 <span>{fmtDate(v.created_at)}</span>
               </div>

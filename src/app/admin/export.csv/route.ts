@@ -1,6 +1,5 @@
 import { getDb } from '@/lib/db';
 import { getCandidate } from '@/lib/candidates';
-import { getCategoryLabel } from '@/lib/categories';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -12,7 +11,7 @@ function csvEscape(s: string): string {
 
 export async function GET() {
   const votes = await getDb().listVotes();
-  const header = ['id', '投票日時', '更新日時', '魔剣士', '部門', '理由', 'voter_hash'];
+  const header = ['id', '投票日時', '更新日時', '魔剣士', '理由', 'voter_hash'];
   const lines = [header.map(csvEscape).join(',')];
   for (const v of votes) {
     lines.push(
@@ -21,7 +20,6 @@ export async function GET() {
         v.created_at,
         v.updated_at,
         getCandidate(v.candidate_id)?.name ?? v.candidate_id,
-        getCategoryLabel(v.category),
         v.reason,
         v.voter_hash,
       ]

@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { getCandidate } from '@/lib/candidates';
-import { CATEGORIES } from '@/lib/categories';
 import { checkPeriod } from '@/lib/period';
 import { getClientIp, getOrCreateCookieId, hashVoter } from '@/lib/voter';
 
@@ -14,7 +13,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: '現在投票は受け付けていません。' }, { status: 403 });
   }
 
-  let body: { candidateId?: string; category?: string; reason?: string };
+  let body: { candidateId?: string; reason?: string };
   try {
     body = await req.json();
   } catch {
@@ -22,14 +21,11 @@ export async function POST(req: Request) {
   }
 
   const candidateId = String(body.candidateId ?? '');
-  const category = String(body.category ?? '');
+  const category = '';
   const reason = String(body.reason ?? '').trim();
 
   if (!getCandidate(candidateId)) {
     return NextResponse.json({ error: '魔剣士の選択が不正です。' }, { status: 400 });
-  }
-  if (!CATEGORIES.find((c) => c.id === category)) {
-    return NextResponse.json({ error: '部門の選択が不正です。' }, { status: 400 });
   }
   if (reason.length < 10) {
     return NextResponse.json({ error: '投票理由は10文字以上で記入してください。' }, { status: 400 });

@@ -3,12 +3,10 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CANDIDATE_GROUPS } from '@/lib/candidates';
-import { CATEGORIES } from '@/lib/categories';
 
 export default function VoteForm() {
   const router = useRouter();
   const [candidateId, setCandidateId] = useState('');
-  const [category, setCategory] = useState('');
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -17,7 +15,6 @@ export default function VoteForm() {
     e.preventDefault();
     setError(null);
     if (!candidateId) return setError('魔剣士を選択してください。');
-    if (!category) return setError('部門を選択してください。');
     if (reason.trim().length < 10)
       return setError('投票理由は10文字以上で記入してください。');
 
@@ -26,7 +23,7 @@ export default function VoteForm() {
       const res = await fetch('/api/vote', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ candidateId, category, reason: reason.trim() }),
+        body: JSON.stringify({ candidateId, reason: reason.trim() }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -72,34 +69,6 @@ export default function VoteForm() {
                 ))}
               </div>
             </div>
-          ))}
-        </div>
-      </section>
-
-      <section>
-        <h2 className="text-meigoku-gold text-lg mb-3 border-b border-meigoku-border pb-2">
-          🏷️ 部門を選択
-        </h2>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {CATEGORIES.map((c) => (
-            <label
-              key={c.id}
-              className={`flex items-center gap-2 px-3 py-2 rounded border cursor-pointer transition ${
-                category === c.id
-                  ? 'border-meigoku-gold bg-meigoku-border/40'
-                  : 'border-meigoku-border hover:border-meigoku-accent'
-              }`}
-            >
-              <input
-                type="radio"
-                name="category"
-                value={c.id}
-                checked={category === c.id}
-                onChange={() => setCategory(c.id)}
-                className="accent-meigoku-gold"
-              />
-              <span>{c.label}</span>
-            </label>
           ))}
         </div>
       </section>
