@@ -6,7 +6,6 @@ import fsp from 'node:fs/promises';
 export type VoteRow = {
   id: number;
   candidate_id: string;
-  category: string;
   reason: string;
   voter_hash: string;
   cookie_id: string;
@@ -14,11 +13,11 @@ export type VoteRow = {
   updated_at: string;
 };
 
+export type VotePick = { candidateId: string; reason: string };
+
 type Db = {
-  upsertVote: (v: {
-    candidateId: string;
-    category: string;
-    reason: string;
+  replaceVotes: (args: {
+    picks: VotePick[];
     voterHash: string;
     cookieId: string;
   }) => Promise<void>;
@@ -74,26 +73,18 @@ function createJsonDb(): Db {
   }
 
   return {
-    async upsertVote(v) {
+    async replaceVotes({ picks, voterHash, cookieId }) {
       const op = writing.then(async () => {
-        const rows = await readAll();
+        const rows = (await readAll()).filter((r) => r.voter_hash !== voterHash);
         const now = new Date().toISOString();
-        const existing = rows.find((r) => r.voter_hash === v.voterHash);
-        if (existing) {
-          existing.candidate_id = v.candidateId;
-          existing.category = v.category;
-          existing.reason = v.reason;
-          existing.cookie_id = v.cookieId;
-          existing.updated_at = now;
-        } else {
-          const nextId = rows.reduce((m, r) => Math.max(m, r.id), 0) + 1;
+        let nextId = rows.reduce((m, r) => Math.max(m, r.id), 0) + 1;
+        for (const p of picks) {
           rows.push({
-            id: nextId,
-            candidate_id: v.candidateId,
-            category: v.category,
-            reason: v.reason,
-            voter_hash: v.voterHash,
-            cookie_id: v.cookieId,
+            id: nextId++,
+            candidate_id: p.candidateId,
+            reason: p.reason,
+            voter_hash: voterHash,
+            cookie_id: cookieId,
             created_at: now,
             updated_at: now,
           });
@@ -120,35 +111,49 @@ function createPostgresDb(): Db {
       CREATE TABLE IF NOT EXISTS votes (
         id SERIAL PRIMARY KEY,
         candidate_id TEXT NOT NULL,
-        category TEXT NOT NULL,
+        category TEXT,
         reason TEXT NOT NULL,
-        voter_hash TEXT NOT NULL UNIQUE,
+        voter_hash TEXT NOT NULL,
         cookie_id TEXT NOT NULL,
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
     `);
+    // 旧スキーマ (UNIQUE制約) からの移行
+    await pool.query(
+      `ALTER TABLE votes DROP CONSTRAINT IF EXISTS votes_voter_hash_key;`,
+    );
+    await pool.query(
+      `CREATE INDEX IF NOT EXISTS votes_voter_hash_idx ON votes(voter_hash);`,
+    );
     initialized = true;
   }
   return {
-    async upsertVote(v) {
+    async replaceVotes({ picks, voterHash, cookieId }) {
       await init();
-      await pool.query(
-        `INSERT INTO votes (candidate_id, category, reason, voter_hash, cookie_id)
-         VALUES ($1, $2, $3, $4, $5)
-         ON CONFLICT (voter_hash) DO UPDATE SET
-           candidate_id = EXCLUDED.candidate_id,
-           category = EXCLUDED.category,
-           reason = EXCLUDED.reason,
-           cookie_id = EXCLUDED.cookie_id,
-           updated_at = NOW();`,
-        [v.candidateId, v.category, v.reason, v.voterHash, v.cookieId],
-      );
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(`DELETE FROM votes WHERE voter_hash = $1`, [voterHash]);
+        for (const p of picks) {
+          await client.query(
+            `INSERT INTO votes (candidate_id, reason, voter_hash, cookie_id)
+             VALUES ($1, $2, $3, $4)`,
+            [p.candidateId, p.reason, voterHash, cookieId],
+          );
+        }
+        await client.query('COMMIT');
+      } catch (e) {
+        await client.query('ROLLBACK').catch(() => undefined);
+        throw e;
+      } finally {
+        client.release();
+      }
     },
     async listVotes() {
       await init();
       const { rows } = await pool.query(
-        `SELECT id, candidate_id, category, reason, voter_hash, cookie_id,
+        `SELECT id, candidate_id, reason, voter_hash, cookie_id,
                 created_at, updated_at
          FROM votes
          ORDER BY created_at DESC`,
