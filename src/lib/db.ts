@@ -119,10 +119,12 @@ function createPostgresDb(): Db {
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
     `);
-    // 旧スキーマ (UNIQUE制約) からの移行
+    // 旧スキーマからの移行
     await pool.query(
       `ALTER TABLE votes DROP CONSTRAINT IF EXISTS votes_voter_hash_key;`,
     );
+    await pool.query(`ALTER TABLE votes ALTER COLUMN category DROP NOT NULL;`);
+    await pool.query(`ALTER TABLE votes ALTER COLUMN category SET DEFAULT '';`);
     await pool.query(
       `CREATE INDEX IF NOT EXISTS votes_voter_hash_idx ON votes(voter_hash);`,
     );
